@@ -2,66 +2,82 @@
 #
 # Legacy of Norrath Launch Script for Linux
 # Note:
+
 # This assumes you've made your WINE prefix to $HOME/.local/win32/lon and have
 # extracted the LoNClient.rar to $HOME/.local/win32/lon/drive_c/lon/LoNclient
 # and placed the loginproxy.py in $HOME/.local/win32/lon/drive_c/lon
 #
-# Note 2: This script is not currently capable of running a 2nd character (box).
 #
 WINEARCH="win32"
 WINEPREFIX="${HOME}/.local/${WINEARCH}/lon"
 LONHOME="${WINEPREFIX}/drive_c/lon"
 LONDIR="${LONHOME}/LoNClient"
-BINDIR="${HOME}/.local/bin"
 
 export WINEARCH WINEPREFIX LONHOME LONDIR
 
 cd "${LONHOME}"
-if [ ! -d tmp ]; then
-  mkdir tmp
+mkdir -p tmp
+
+################################################################################
+# Determine if EQ is already running.  If we are to use this for 2-boxing, we
+# want to allow that, but if it isn't already running, we want to stop any
+# existing proxy app so we can start from a known state.
+
+EQ_CNT=$(pgrep -c eqgame.exe)
+
+if [[ "$EQ_CNT" == 0 ]]; then
+  pkill -f loginproxy.py 2>/dev/null  # don't care if it's not already running.
+  
+  # remove the loginproxy.pid file
+  if [ -f tmp/loginproxy.pid ]; then
+    rm -f tmp/loginproxy.pid 2>/dev/null
+  fi
 fi
 
-# exit if everquest is already running.
-# Note: this will prevent you from boxing on the same PC.
-# this isn't a problem for me as I box using my desktop and laptop.
-if [ $(pgrep -c eqgame.exe) == 1 ]; then
-  echo The game client is already running.
-  echo Stopping.
-  exit 0
-fi
+# Make sure the login proxy is running.  If it's already running, leave it
+# alone, if not, start it.
+# Note that this fails horribly with python 3 (uses all of a CPU).
+case $(python --version) in
+  Python?3*)
+    echo This script behaves badly with python 3.
+    echo Please install a python 2 and put it higher in your PATH.
+    echo Exiting...
+    exit 2
+    ;;
+esac
 
-# everquest is not running, so stop loginproxy if this is the case.
-if [ $(pgrep -c -f loginproxy.py) == 1 ]; then
-  echo The loginproxy process is already running.
-  pkill -f loginproxy.py
+if [[ $(pgrep -c loginproxy.py) == 0 ]]; then
+  python loginproxy.py &
+  echo $! > tmp/loginproxy.pid
+  echo Started proxy...
+  STARTED_PROXY=1
 fi
-
-# remove the loginproxy.pid file
-if [ -f tmp/loginproxy.pid ]; then
-  rm -f tmp/loginproxy.pid 2>/dev/null
-fi
-
-# start the loginproxy -- this needs python 2.7 -- if you run this with python3
-# it will take 100% of a CPU.
-python loginproxy.py &
-echo $! > tmp/loginproxy.pid
 
 # change into the LoN client folder
 cd "${LONDIR}"
 
+# backup the patcher provided eqhost.txt in case it updates.
+[ -r eqhost.txt] && cp -f eqhost.txt eqhost.txt.lon
+
 # start the LoN patcher
 taskset -c 0 padsp wine lonpatcher.exe 2>/dev/null
 
-# backup the patcher provided eqhost.txt in case it updates.
 # fixup the eqhost again in case the patcher munges it.
-cp -f eqhost.txt eqhost.txt.lon
 cp -f eqhost.txt.proxy eqhost.txt
 
-# wait while eqgame.exe is running
-while [ $(pgrep -c eqgame.exe) == 1 ]
-do
-	sleep 5
-done
+# If this is the script that started the proxy, we need it to keep running and
+# checking for eqgame.exe instances.  Since this script started the proxy, it
+# needs to be the one that kills it when all eqgame.exe's are done.
+if [ -n "$STARTED_PROXY" ]; then
+  while [[ $(pgrep -c eqgame.exe) > 0 ]]; do
+    sleep 5
+  done
 
-# kill the loginproxy
-kill -9 $(cat "${LONHOME}/tmp/loginproxy.pid")
+  # kill the loginproxy
+  kill -9 $(cat "${LONHOME}/tmp/loginproxy.pid")
+  pkill -f loginproxy.py 2>/dev/null # just in case.
+fi
+
+exit 0
+
+

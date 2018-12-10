@@ -39,8 +39,9 @@ def remote():
 print("Waiting for data on " + FROM_IP + ":" + str(FROM_PORT) + "...")
 lt = threading.Thread(target=local, args=())
 lt.start()
+
 rt = threading.Thread(target=remote, args=())
 rt.start()
+
 while True:
   sleep(0.05)
-  pass
