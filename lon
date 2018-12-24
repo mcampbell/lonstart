@@ -57,7 +57,7 @@ fi
 cd "${LONDIR}"
 
 # backup the patcher provided eqhost.txt in case it updates.
-[ -r eqhost.txt] && cp -f eqhost.txt eqhost.txt.lon
+[ -r eqhost.txt ] && cp -f eqhost.txt eqhost.txt.lon
 
 # start the LoN patcher
 taskset -c 0 padsp wine lonpatcher.exe 2>/dev/null
