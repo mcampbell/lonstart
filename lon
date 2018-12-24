@@ -46,12 +46,14 @@ case $(python --version) in
     ;;
 esac
 
-if [[ $(pgrep -c loginproxy.py) == 0 ]]; then
+PROXY_CNT=$(ps auxwwwww | grep 'python loginproxy.py' | grep -v grep | wc -l)
+if [[ "$PROXY_CNT" == 0 ]]; then
   python loginproxy.py &
   echo $! > tmp/loginproxy.pid
   echo Started proxy...
   STARTED_PROXY=1
 fi
+
 
 # change into the LoN client folder
 cd "${LONDIR}"
@@ -79,5 +81,3 @@ if [ -n "$STARTED_PROXY" ]; then
 fi
 
 exit 0
-
-
